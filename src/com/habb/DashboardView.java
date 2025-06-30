@@ -10,6 +10,7 @@ import java.io.FileOutputStream;
 import java.io.ObjectOutputStream;
 import java.io.FileInputStream;
 import java.io.ObjectInputStream;
+import java.text.DecimalFormat;
 
 /**
  *
@@ -22,41 +23,77 @@ public class DashboardView extends javax.swing.JFrame {
      * Creates new form DashboardView
      */
     public DashboardView() {
-        initComponents();  // ⬅️ Panggil yang GENERATED, bukan yang kosong
-   model = (DefaultTableModel) tableAnggaran.getModel();
+        initComponents();
+    model = (DefaultTableModel) tableAnggaran.getModel();
 
-    // Load data
-    try {
-        FileInputStream fis = new FileInputStream("anggaran_data.ser");
-        ObjectInputStream ois = new ObjectInputStream(fis);
-        Object[][] data = (Object[][]) ois.readObject();
-        for (Object[] row : data) {
-            model.addRow(row);
+    new javax.swing.SwingWorker<Void, Void>() {
+        @Override
+        protected Void doInBackground() throws Exception {
+            try {
+                FileInputStream fis = new FileInputStream("anggaran_data.ser");
+                ObjectInputStream ois = new ObjectInputStream(fis);
+
+                Object[][] data = (Object[][]) ois.readObject();
+                for (Object[] row : data) {
+                    model.addRow(row);
+                }
+
+                ois.close();
+                fis.close();
+
+                System.out.println("Data berhasil dimuat dari file.");
+            } catch (Exception ex) {
+                System.out.println("Belum ada data disimpan, tabel kosong.");
+            }
+            return null;
         }
-        ois.close();
-        fis.close();
-        System.out.println("Data berhasil dimuat dari file.");
-    } catch (Exception ex) {
-        System.out.println("Belum ada data disimpan, tabel kosong.");
-    }
 
-    updateSaldo();  // Panggil setelah tabel diisi
+        @Override
+        protected void done() {
+            // PANGGIL UPDATE SALDO DI SINI, BUKAN DI LUAR!
+            updateSaldo();
+        }
+    }.execute();
     }
     
   
     private void updateSaldo() {
-        int saldo = 0;
-        for (int i = 0; i < model.getRowCount(); i++) {
-            String jenis = model.getValueAt(i, 0).toString();
-            int jumlah = Integer.parseInt(model.getValueAt(i, 2).toString());
-            if (jenis.equals("Pemasukan")) {
-                saldo += jumlah;
-            } else {
-                saldo -= jumlah;
+        new javax.swing.SwingWorker<Integer, Void>() {
+        @Override
+        protected Integer doInBackground() throws Exception {
+            int saldo = 0;
+    for (int i = 0; i < model.getRowCount(); i++) {
+        Object jenisObj = model.getValueAt(i, 0);
+        Object jumlahObj = model.getValueAt(i, 2);
+
+        if (jenisObj == null || jumlahObj == null) {
+            continue; // skip baris yang tidak valid
+        }
+
+        String jenis = jenisObj.toString();
+        int jumlah = Integer.parseInt(jumlahObj.toString());
+
+        if (jenis.equalsIgnoreCase("Pemasukan")) {
+            saldo += jumlah;
+        } else {
+            saldo -= jumlah;
+        }
+    }
+    return saldo;
+        }
+
+        @Override
+        protected void done() {
+            try {
+                int saldo = get();
+                DecimalFormat df = new DecimalFormat("#,###");
+                lblSaldo.setText("Total Saldo: Rp " + df.format(saldo));
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
-        lblSaldo.setText("Total Saldo: Rp " + saldo);
-    }
+    }.execute();
+}
 
     /**
      * This method is called from within the constructor to initialize the form.
